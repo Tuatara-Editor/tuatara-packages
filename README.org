@@ -1,0 +1,194 @@
+#+title: Tuatara packages
+
+Third-party packages for Tuatara, loaded on asking: each does one job that not
+everyone needs, and none is part of the editor.
+
+* The packages
+
+- =kitty= :: =M-x kitty= opens windows of a kitty that Tuatara starts itself,
+  =kitty-text= brings a window's text into a buffer with its colours, and
+  =kitty-input= types into one. =kitty/tuatara-kitty FILE...= runs the editor
+  itself in such a kitty.
+- =outlook= :: Outlook items (.msg), saved mail (.eml) and Outlook mailboxes
+  (.pst, .ost) opened as messages, read only, nothing in them run. Made for
+  examining mail from evidence: attachments are opened only on asking, from
+  private copies, and the files are never changed.
+- =garamond= :: one space or two after a full stop, as the document itself
+  says in its =Local Variables:= block: typed, filled and moved over that way.
+- =facematch= :: candidate photos ranked by how probable it is that they show
+  the person of one or more master photos, marked in rimu: each with its
+  probability (calibrated on LFW) and the ODNI's words for it. Its engine,
+  InsightFace with AuraFace-v1 and YuNet in one AppImage, is a project of its
+  own (github.com/YardQuit/facematch), installed by hand and run shut in the
+  sandbox.
+- =palimpsest= :: a PDF taken apart into every save it holds, from the
+  original to the latest edit, and searched for every sign of editing or
+  forgery examiners know, each with its evidence: read from the file's
+  octets alone, nothing in it run, the file never changed. Each save is
+  written out as a PDF of its own with a log of how to find its signs again
+  by hand.
+- =csv-columns= :: in a CSV or TSV file, the columns of every record
+  rearranged as awk's print does (=$0,$1,$3,$4"cent","hello"=), columns
+  counted from 0 as csvdt counts them; a file of gigabytes in the
+  background on every core.
+
+* Loading them
+
+Name this repository as a source once in =~/.config/tuatara/init.lisp=, then
+load each package by its name, its settings after =:config=:
+
+#+begin_example
+(package-source "tuatara-packages" "https://github.com/Tuatara-Editor/tuatara-packages")
+;; or a copy on your disk:
+;; (package-source "tuatara-packages" "~/path/tuatara-packages/")
+
+(load-package "outlook" :source "tuatara-packages"
+  :config
+  (setf *outlook-include-deleted* nil))
+(load-package "garamond" :source "tuatara-packages")
+#+end_example
+
+Tuatara asks before it first compiles and loads a package, its source offered
+to read. Each package's settings are in its help (=C-h v=) once it is loaded.
+
+* Working on them
+
+Each package is a folder: =NAME/NAME.lisp= is its entry, loading its other
+files with =load-package-file=, and =NAME/test.lisp= holds its tests. Each has
+a Lisp package of its own that uses Tuatara's API, the names the package
+=tuatara= exports (Tuatara's =lisp/api.lisp=), and nothing else of Tuatara's:
+
+#+begin_src lisp
+(defpackage #:garamond
+  (:use #:cl #:tuatara))
+#+end_src
+
+Positions are octets from 0 into a buffer's text, as Tuatara's core counts
+them. A setting is made with =define-package-setting=, its name beginning with
+the package's (=*garamond-mode-line*=), so that an init file sets it by that
+name as it sets Tuatara's own. =tools/test.sh= fails a package that uses a
+name outside the API.
+
+#+begin_example
+tools/test.sh      # every package's tests
+#+end_example
+
+The tests run against a Tuatara source tree, =../tuatara= beside this
+repository unless =TUATARA_SOURCE= names another, with Tuatara's own test
+helpers, and in its toolbox when there is one. The packages follow Tuatara's
+conventions (its =HACKING.org=): a docstring on every definition, English in
+any spelling, one way for each kind of thing. To contribute, see
+[[file:CONTRIBUTING.md][CONTRIBUTING.md]].
+
+** What Tuatara gives a package
+
+A package uses what Tuatara already has rather than writing its own copy.
+When it needs a helper Tuatara has but does not export, the helper is
+exported (added to =lisp/api.lisp=), not copied. These are the ones a
+package most often needs:
+
+- Scratch files :: a buffer that needs a folder of its own for its working
+  files asks for one when it is made, =(reading-buffer ... :private-folder
+  "NAME/")=, and =buffer-private-folder= names it. It lies in Tuatara's
+  private cache, readable by you alone, and is deleted when the buffer is
+  killed, once the buffer's background jobs have ended.
+- Files kept :: a file written for keeping (a report, a copy taken out) is
+  made with =write-new-file=: read-only (0400) from the moment it is
+  created, never written over a file or a link already there.
+  =write-private-copy= makes a private copy of a file in the cache.
+- Paths :: =native=, =expand-path=, =parent-path=, =path-join=,
+  =slash-ended=, =path-within-p= (inside a folder, =..= taken into
+  account), =native-file-name=, =native-file-stem=, =native-file-type=.
+- Files read whole :: =file-octets= with =:limit=, or =fd-octets= on a
+  file already open, reads a file whole and refuses one larger than the
+  limit, however large it turns out to be as it is read.
+- XML :: =xml-parse= (bounded in depth and size; =:most= sets how many
+  elements), then =xml-name=, =xml-attribute=, =xml-children=,
+  =xml-child=, =xml-local-name=, =xml-local-children=, =xml-find-all= and
+  =xml-all-text= to walk the tree; =xml-escape= writes text into XML or
+  HTML.
+- Octets, text and dates :: the type =octets= and its readers,
+  =string-octets=, =octets-string=, =utf-16-text=; =time-words=,
+  =utc-time-words=, =iso-date-time=, =format-time=; =octets-hex= writes
+  octets in hex, =shorten-string= cuts text to a length after a word.
+- PDF :: =pdf-header-at= tells a PDF by its first octets;
+  =pdf-object-at= reads a value, =pdf-get=, =pdf-ref-p= and
+  =pdf-array-items= look into it; =pdf-indirect-object-at= reads an object
+  where the file writes it, with its stream's place, and
+  =pdf-stream-octets= decodes that stream, held to a size, pictures left as
+  they are; =pdf-object-stream-offsets= and =pdf-packed-object= read the
+  objects an object stream holds. Nothing in the file is run.
+- Octets shown :: =show-octets-in-hex= shows octets a package made in a
+  buffer of their own in the hex view, read only.
+- Comparing :: =line-diff= gives the lines removed and added between two
+  lists of lines, in little memory however long they are.
+- Lines of a large file :: =rewrite-lines= gives each line of a region to a
+  function that keeps, changes or deletes it: in the background on every
+  core for a file of gigabytes, edits made meanwhile kept, one step to undo.
+  =selected-lines= gives the region; =csv-field-spans=, =csv-value-bounds=
+  and =csv-field-value= read fields as Tuatara's CSV mode does, and
+  =csv-header-names= gives the names of a CSV buffer's columns.
+- The selection and changing a buffer :: =selected-region= gives the text
+  selected, or NIL when none is; =check-writable= refuses, in Tuatara's own
+  words, to change a read-only buffer.
+- Sentences :: =sentence-end-char-p=, =sentence-closing-char-p= and
+  =abbreviation-before-p= (an abbreviation's full stop ends no sentence:
+  =*sentence-abbreviations*= and those of =*extra-sentence-abbreviations*=)
+  tell where a sentence ends as the sentence commands and filling do.
+- Sizes :: =octets-words= says a number of octets in words: 12.3 MB, or
+  with =:compact= 4.1K for a narrow column.
+- Background work :: =start-job-thread=, =job-check-stop= and
+  =running-percent=: the editor never waits on a package.
+- Lists narrowed by a search :: any list made with =render-pieces= and its
+  entries is narrowed by =C-x / s= (=search-filter-regex=), the filters
+  stacking; =set-search-filtering= gives more text of each entry to match
+  than its line (matched in the background), names a list's headings, and
+  has =C-s= narrow the list. =search-filters= and =light-search-filters= give
+  the filters kept and light their matches where an entry is opened.
+- The entry on a list's line, beside it :: a method of =preview-entry= for
+  the list's mode gives the buffer showing an entry, and the preview
+  follows the cursor in a window beside the list, as rimu's does;
+  =entry-preview-keys= gives the list =P= (=list-toggle-preview=), and the
+  list's =:list-preview= says whether it is on.
+- Menus, help and switches :: =define-menu= puts a few ways of doing a
+  thing under one key, in the panel (=menu-arguments= reads its switches);
+  =show-help= with =:fill= shows a page of help or a report in =*Help*=,
+  filled as documentation is; =define-display-toggle= makes a way of
+  showing switched on and off, its settings the package's, and
+  =switched-by-count= any other on and off.
+- Questions :: =completing-read=, =completing-read-value=, =read-date= (a
+  date as typed: tomorrow, fri, +3d, sep 30), =read-whole-number=,
+  =read-path=, =yes-or-no-p*=.
+- Programs from outside :: =sandbox-run= and =run-on-copies= run a program
+  shut in, on copies of the files, never on the files themselves;
+  =run-on-copies-for-report= reads the JSON report such a program prints,
+  =sandbox-pdf= has one draw a PDF of a document, =sandbox-outcome-words=
+  says why a run gave nothing, and =program-health-words= says what runs
+  a thing, for =M-x check-health=.
+
+The whole list is Tuatara's =lisp/api.lisp=; each name's help (=C-h f=)
+says what it is for.
+
+* Credits
+
+- garamond :: made from the Emacs package of the same name, by the same author
+  (github.com/YardQuit/garamond).
+- facematch :: InsightFace (MIT) aligns and embeds faces; AuraFace-v1 by fal
+  (Apache 2.0) makes them numbers; YuNet from OpenCV Zoo (MIT) finds them;
+  the probabilities are calibrated on Labeled Faces in the Wild (University
+  of Massachusetts, Amherst); the words are the ODNI's (ICD 203).
+- Microsoft's Open Specifications (MS-CFB, MS-OXMSG) :: how outlook reads an
+  Outlook item; mailboxes are read by readpst, from libpst.
+- WeasyPrint, by CourtBouillon :: outlook draws a message as it looks with
+  it, shut in.
+- awk and csvdt :: how csv-columns rearranges columns, as awk's print does,
+  counted from 0 as csvdt counts them (csvdt by the same author).
+- kitty, by Kovid Goyal :: the program the kitty package drives, by its remote
+  control.
+- ISO 32000 :: how palimpsest reads a PDF; the shadow attacks it looks for
+  were described by Christian Mainka, Vladislav Mladenov and Simon Rohlmann
+  (Ruhr University Bochum).
+
+* License
+
+GPL-3.0-or-later; see LICENSE.
