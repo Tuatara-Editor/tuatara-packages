@@ -36,9 +36,9 @@ stream (as text, or in hex in a buffer of its own when it is not text;
 in hex too with \\[universal-argument]); \\[palimpsest-save] saves the revisions, their logs and the report to a
 folder of your choosing; \\[palimpsest-write-revision] writes the revision whose part point is in
 as a PDF to show, its log beside it; \\[palimpsest-write-report] writes the report alone as
-text; \\[quit-window] closes. Closing the report closes the revisions and logs opened
-from it and deletes its own copies of the revisions, asking first when they
-were not saved."
+text; \\[quit-window] leaves it, \\[kill-buffer] closes it. Closing the report
+closes the revisions and logs opened from it and deletes its own copies of
+the revisions, asking first when they were not saved."
   :lighter "Palimpsest" :interactive nil)
 
 (defvar *palimpsest-reports* '()
@@ -320,9 +320,13 @@ revision before. The same file gives the same log but for its date line."
                                        (and (revision-startxref-at revision) (hex-offset (revision-startxref-at revision)))))
                  (multiple-value-bind (info number) (info-of pdf revision)
                    (declare (ignore info))
-                   (line "Trailer" (format nil "~@[/Info object ~d~]~@[, /ID <~{~a~^> <~}>~]~@[, /Prev ~a~]" number
-                                           (let ((id (pdf-array-items (pdf-get (revision-trailer revision) "/ID")))) (and id (every #'stringp id) (mapcar #'id-hex id)))
-                                           (and (revision-prev revision) (hex-offset (revision-prev revision))))))
+                   (line "Trailer" (format nil "~{~a~^, ~}"
+                                           (remove nil (list (let ((root (pdf-ref-p (pdf-get (revision-trailer revision) "/Root"))))
+                                                               (if root (format nil "/Root object ~d" root) "no /Root"))
+                                                             (and number (format nil "/Info object ~d" number))
+                                                             (let ((id (pdf-array-items (pdf-get (revision-trailer revision) "/ID"))))
+                                                               (and id (every #'stringp id) (format nil "/ID <~{~a~^> <~}>" (mapcar #'id-hex id))))
+                                                             (and (revision-prev revision) (format nil "/Prev ~a" (hex-offset (revision-prev revision)))))))))
                  (line "Claims" (let ((made (info-text pdf revision "/CreationDate")) (changed (info-text pdf revision "/ModDate"))
                                       (producer (info-text pdf revision "/Producer")))
                                   (and (or made changed producer)

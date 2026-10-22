@@ -169,18 +169,18 @@ content, fonts, pictures and annotations, its form's fields, its metadata."
               (let ((resources (page-resources page)))
                 (loop for (name . value) in (let ((f (dref pdf revision resources "/Font"))) (and (pdf-dictionary-p f) f))
                       do (let ((font (deref pdf revision value)))
-                           (role value (format nil "font ~a~@[ (~a)~] of page ~d" (subseq name 1)
+                           (role value (format nil "the font ~a~@[ (~a)~] of page ~d" (subseq name 1)
                                                (let ((b (pdf-get font "/BaseFont"))) (and (stringp b) (subseq b 1))) p))))
                 (loop for (name . value) in (let ((x (dref pdf revision resources "/XObject"))) (and (pdf-dictionary-p x) x))
                       do (let ((x (deref pdf revision value)))
-                           (role value (format nil "~:[form~;picture~] ~a of page ~d" (name-p (pdf-get x "/Subtype") "/Image") (subseq name 1) p)))))
+                           (role value (format nil "the ~:[form~;picture~] ~a of page ~d" (name-p (pdf-get x "/Subtype") "/Image") (subseq name 1) p)))))
               (dolist (a (page-annots page))
                 (let ((annot (deref pdf revision a)))
-                  (role a (format nil "~a annotation on page ~d"
-                                  (let ((s (pdf-get annot "/Subtype"))) (if (stringp s) (subseq s 1) "an")) p))))))
+                  (role a (format nil "an annotation~@[ (~a)~] on page ~d"
+                                  (let ((s (pdf-get annot "/Subtype"))) (and (stringp s) (subseq s 1))) p))))))
           (dolist (field (form-fields pdf revision))
             (destructuring-bind (name number dict) field
-              (when number (role (list :ref number 0) (format nil "form field ~s" name)))
+              (when number (role (list :ref number 0) (format nil "the form field ~s" name)))
               (role (pdf-get dict "/V") (format nil "the value of form field ~s" name)))))
         (setf (revision-roles revision) roles))))
 
@@ -194,7 +194,7 @@ content, fonts, pictures and annotations, its form's fields, its metadata."
         (cond ((name-p type "/ObjStm") "an object stream")
               ((name-p type "/XRef") "a cross-reference stream")
               ((name-p type "/Sig") "a signature")
-              ((stringp type) (format nil "a ~a" (subseq type 1)))))))
+              ((stringp type) (format nil "an object of type ~a" (subseq type 1)))))))
 
 ;;; Content tokens
 
@@ -597,9 +597,10 @@ line end after each."
 
 (defun page-marks (pdf revision page)
   "What PAGE draws in REVISION, in the order drawn (a vector of MARK), and
-as a second value what could not be read of it, in words. Its operators are
-counted against *MOST-OPERATORS-IN-ALL*, and once that is reached no more
-is read: that is noted in PDF (NOTE), and nothing is drawn."
+as a second value what could not be read of it, in words, noted in PDF too
+(NOTE) for the report to say. Its operators are counted against
+*MOST-OPERATORS-IN-ALL*, and once that is reached no more is read: that is
+noted in PDF, and nothing is drawn."
   (let* ((marks (make-array 0 :adjustable t :fill-pointer 0)) (problems '()) (order 0) (operators 0)
          (left (- *most-operators-in-all* (getf (pdf-cache pdf) :operators-read 0)))
          (most (min *most-operators* left))
@@ -806,6 +807,8 @@ is read: that is noted in PDF (NOTE), and nothing is drawn."
           (run (joined-content (nreverse pieces) at) (page-resources page) (make-state) 0 :page 0
                (coerce (nreverse segments) 'vector)))))
     (incf (getf (pdf-cache pdf) :operators-read 0) (min operators most))
+    (dolist (problem problems)
+      (note pdf "In revision ~d, ~a" (1+ (revision-index revision)) problem))
     (values marks (nreverse problems))))
 
 (defun marks-of (pdf revision page)

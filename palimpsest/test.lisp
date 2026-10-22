@@ -312,8 +312,16 @@ xmp:CreateDate='2020-03-01T09:00:00+13:00' xmp:CreatorTool='Kea Writer' xmpMM:Do
       (declare (ignore pdf accounts))
       (true (pal-finding findings :record "An approval signature (object 8), dated 2026-01-02"))
       (true (pal-finding findings :strong "after the signature in object 8, changes what the document shows"))
-      (true (pal-finding findings :strong "a shadow attack"))
+      (true (pal-finding findings :strong "Object 9 was hidden, unused, in the part the signature in object 8 covers"))
       (false (pal-finding findings :strong "stops short"))))
+  ;; an approval signature, then a note: annotations after it are allowed
+  (let ((noted (pal-save (pal-signed)
+                         '((3 . "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R /Annots [10 0 R] >>")
+                           (10 . "<< /Type /Annot /Subtype /Text /Rect [72 600 92 620] /Contents (Checked, R Waimate) >>")))))
+    (multiple-value-bind (pdf accounts findings) (pal-read noted)
+      (declare (ignore pdf accounts))
+      (false (pal-finding findings :strong "do not allow"))
+      (true (pal-finding findings :look "after the signature in object 8, adds or changes annotations."))))
   ;; a /ByteRange that stops short of where its save ends
   (multiple-value-bind (pdf accounts findings) (pal-read (pal-signed :short 10))
     (declare (ignore pdf accounts))
@@ -364,7 +372,7 @@ FONTS beside it (each a base font name)."
   ;; one page of another size, one of another font: each named
   (let* ((pdf (palimpsest::read-pdf (pal-pages '(612 612 500 612) '("Helvetica" "Helvetica" "Helvetica" "Courier"))))
          (findings (palimpsest::check-pages pdf)))
-    (true (pal-finding findings :look "Page 3 has a size"))
+    (true (pal-finding findings :look "Page 3 has a size (500 by 792) unlike every other page"))
     (true (pal-finding findings :look "Page 4 shares no font"))
     (false (pal-finding findings :look "Page 1 has"))
     (false (pal-finding findings :look "Page 3 shares")))
@@ -848,3 +856,72 @@ FONTS beside it (each a base font name)."
         (tuatara.io:remove-file to-cache)
         (tuatara.io:remove-file to-evidence)
         (tuatara.io:delete-tree folder)))))
+
+;;; Findings that read a page, an action or a save rightly worded
+
+(define-test (palimpsest palimpsest-text-fitted-into-a-gap)
+  ;; a line whose characters are moved apart, the rest of the page not: named, and the page's other checks kept
+  (multiple-value-bind (pdf accounts findings)
+      (pal-read (pal-one-page (concatenate 'string
+                                           "BT /F1 12 Tf 72 700 Td (Invoice for Kea Builders Ltd) Tj ET BT /F1 12 Tf 72 680 Td (Thank you for your business) Tj ET "
+                                           "BT /F1 12 Tf 72 660 Td [(T) -400 (o) -400 (t) -400 (a) -400 (l) -400 (:) -400 (9) -400 (0) -400 (0)] TJ ET "
+                                           "BT /F1 12 Tf 3 Tr 72 600 Td (Hidden words) Tj ET")))
+    (declare (ignore pdf accounts))
+    (true (pal-finding findings :look "1 line on page 1 is spaced oddly, its characters set apart one by one"))
+    (true (pal-finding findings nil "holds invisible text"))
+    (false (pal-finding findings nil "could not finish"))))
+
+(define-test (palimpsest palimpsest-actions-inside-objects)
+  ;; a link's action written inside the link: found, named, and the link and a layer named for what they are
+  (multiple-value-bind (pdf accounts findings)
+      (pal-read (pal-save #() '((1 . "<< /Type /Catalog /Pages 2 0 R >>")
+                                (2 . "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+                                (3 . "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R /Annots [7 0 R] >>")
+                                (4 :stream "" "BT /F1 12 Tf 72 700 Td (Pay online) Tj ET")
+                                (5 . "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>")
+                                (6 . "<< /Producer (Kea Writer) >>")
+                                (7 . "<< /Type /Annot /Subtype /Link /Rect [72 690 300 710] /A << /S /URI /URI (https://example.org/pay) >> >>")
+                                (8 . "<< /Type /OCG /Name (Draft notes) >>"))))
+    (declare (ignore accounts))
+    (let ((actions (pal-finding findings :record "The file holds 1 action that goes to places")))
+      (true actions)
+      (is equal '("object 7: URI \"https://example.org/pay\"") (palimpsest::finding-details actions)))
+    (is string= "an annotation (Link) on page 1" (palimpsest::role-words pdf (palimpsest::last-revision pdf) 7))
+    (is string= "the font F1 (Helvetica) of page 1" (palimpsest::role-words pdf (palimpsest::last-revision pdf) 5))
+    (is string= "an object of type OCG" (palimpsest::role-words pdf (palimpsest::last-revision pdf) 8))))
+
+(define-test (palimpsest palimpsest-pages-not-read-said)
+  ;; a page whose content stream is not in the file: the report's summary says so
+  (multiple-value-bind (pdf accounts findings)
+      (pal-read (pal-save #() '((1 . "<< /Type /Catalog /Pages 2 0 R >>")
+                                (2 . "<< /Type /Pages /Kids [3 0 R] /Count 1 >>")
+                                (3 . "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Contents 9 0 R >>")
+                                (6 . "<< /Producer (Kea Writer) >>"))))
+    (declare (ignore accounts findings))
+    (true (find "In revision 1, page 1's content stream, object 9, is not in the file" (palimpsest::pdf-notes pdf) :test #'string=))))
+
+(define-test (palimpsest palimpsest-findings-worded)
+  ;; dates that disagree, in the plural
+  (let ((xmp "<x:xmpmeta xmlns:x='adobe:ns:meta/'><rdf:RDF xmlns:rdf='http://www.w3.org/1999/02/22-rdf-syntax-ns#'><rdf:Description xmlns:xmp='http://ns.adobe.com/xap/1.0/' xmp:ModifyDate='2026-01-01T09:00:00+13:00'/></rdf:RDF></x:xmpmeta>"))
+    (multiple-value-bind (pdf accounts findings)
+        (pal-read (pal-save #() (list '(1 . "<< /Type /Catalog /Pages 2 0 R /Metadata 7 0 R >>")
+                                      '(2 . "<< /Type /Pages /Kids [] /Count 0 >>")
+                                      '(6 . "<< /ModDate (D:20260301090000+13'00') >>")
+                                      (list 7 :stream "/Type /Metadata /Subtype /XML" xmp))))
+      (declare (ignore pdf accounts))
+      (true (pal-finding findings :strong "give different dates last changed"))))
+  ;; a PDF typed by hand, with no cross-reference section nor startxref: its trailer said, the step to see it true
+  (with-test-directory (dir)
+    (let* ((path (namestring (merge-pathnames "hand.pdf" dir)))
+           (folder (tuatara.defaults::new-private-folder (tuatara.defaults::private-cache-directory "palimpsest/"))))
+      (with-open-file (out path :direction :output :element-type '(unsigned-byte 8))
+        (write-sequence (pal-octets (format nil "%PDF-1.4~%1 0 obj~%<< /Type /Catalog /Pages 2 0 R >>~%endobj~%2 0 obj~%<< /Type /Pages /Kids [] /Count 0 >>~%endobj~%trailer~%<< /Root 1 0 R >>~%%%EOF~%")) out))
+      (let ((job (palimpsest::make-palimpsest-job nil path folder)))
+        (palimpsest::examine job)
+        (let* ((analysis (palimpsest::palimpsest-job-analysis job))
+               (report (palimpsest::pieces-text (palimpsest::report-pieces analysis)))
+               (problem (find-if (lambda (f) (search "startxref" (palimpsest::finding-words f))) (palimpsest::analysis-findings analysis))))
+          (pal-has report "Trailer     /Root object 1")
+          (true problem)
+          (pal-has (format nil "~{~a~%~}" (palimpsest::finding-steps problem)) "no startxref stands before it")))
+      (tuatara.io:delete-tree folder))))
