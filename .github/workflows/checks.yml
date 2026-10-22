@@ -7,6 +7,13 @@ permissions: {}
 jobs:
   author:
     uses: Tuatara-Editor/.github/.github/workflows/approved-author.yml@c6fdd3dfec1a210f38ee7283d77b2c4e7eb5f36a # main of 2026-10-21
+    with:
+      roles: admin maintain write
+      note: >-
+        Thank you for your interest in Tuatara. The packages here are written
+        and kept by the project's maintainers, who take no pull requests from
+        others: a bug report or an idea is welcome as an issue, and a package
+        of your own lives in a repository of your own; see CONTRIBUTING.md.
     permissions:
       pull-requests: write
   sign-off:

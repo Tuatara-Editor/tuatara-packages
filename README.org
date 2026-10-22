@@ -1,7 +1,12 @@
 #+title: Tuatara packages
 
-Third-party packages for Tuatara, loaded on asking: each does one job that not
-everyone needs, and none is part of the editor.
+Packages for Tuatara, written and kept by the Tuatara project, loaded on
+asking: each does one job that not everyone needs, and none is part of the
+editor.
+
+Packages by others are not taken in here. Tuatara loads a package from any
+git repository, so a package of your own lives in a repository of your own,
+where you keep it and answer its users; [[*Loading them][Loading them]] shows how.
 
 * The packages
 
@@ -77,8 +82,8 @@ The tests run against a Tuatara source tree, =../tuatara= beside this
 repository unless =TUATARA_SOURCE= names another, with Tuatara's own test
 helpers, and in its toolbox when there is one. The packages follow Tuatara's
 conventions (its =HACKING.org=): a docstring on every definition, English in
-any spelling, one way for each kind of thing. To contribute, see
-[[file:CONTRIBUTING.md][CONTRIBUTING.md]].
+any spelling, one way for each kind of thing. For bug reports, ideas and how
+changes are made, see [[file:CONTRIBUTING.md][CONTRIBUTING.md]].
 
 ** What Tuatara gives a package
 
