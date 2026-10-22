@@ -6,7 +6,7 @@ on:
 permissions: {}
 jobs:
   author:
-    uses: Tuatara-Editor/.github/.github/workflows/approved-author.yml@c6fdd3dfec1a210f38ee7283d77b2c4e7eb5f36a # main of 2026-10-21
+    uses: Tuatara-Editor/.github/.github/workflows/approved-author.yml@68d0d33dd8731b283302e777d72c2e4f0d38708f # main of 2026-10-22
     with:
       roles: admin maintain write
       note: >-
@@ -18,6 +18,6 @@ jobs:
       pull-requests: write
   sign-off:
     needs: author
-    uses: Tuatara-Editor/.github/.github/workflows/sign-off.yml@c6fdd3dfec1a210f38ee7283d77b2c4e7eb5f36a # main of 2026-10-21
+    uses: Tuatara-Editor/.github/.github/workflows/sign-off.yml@68d0d33dd8731b283302e777d72c2e4f0d38708f # main of 2026-10-22
     permissions:
       pull-requests: read
