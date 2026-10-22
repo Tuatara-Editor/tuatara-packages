@@ -2,7 +2,7 @@
 
 A PDF taken apart into every save it holds, from the original to the latest
 edit, and searched for every sign of editing or forgery that examiners of
-documents know. A third-party package for Tuatara, not part of the editor.
+documents know. One of the Tuatara project's packages, not part of the editor.
 
 Everything is read from the file's octets, by the package itself: no other
 program reads the PDF, nothing in it is run (no JavaScript, no actions, no

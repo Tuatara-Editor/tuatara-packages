@@ -1,49 +1,44 @@
 # Contributing to Tuatara's packages
 
-Changes come into these packages only through pull requests, and pull requests
-only from approved contributors. Anyone may open an issue: to report a
-fault, to suggest an idea, or to talk about a change before making it.
+The packages here are the Tuatara project's own: its maintainers write them,
+keep them working, and decide what is added. They take no pull requests and
+no packages written elsewhere; Tuatara's approved contributors work on the
+editor itself (see its
+[CONTRIBUTING.md](https://github.com/Tuatara-Editor/tuatara/blob/main/CONTRIBUTING.md)).
 
-## Becoming an approved contributor
+## What is welcome
 
-Open an issue that says what you would like to work on. A maintainer who
-agrees adds you to the organisation's contributors; a pull request from
-anyone else is closed by the checks, with a note pointing here.
+- **A bug report** for one of these packages: open an issue, saying which
+  package, what happened, and how to make it happen again. Never attach a
+  file you are not free to share: a small made-up one that shows the same
+  is enough.
+- **An idea** for one of these packages, or for a new one: open an issue
+  that says what you want to do and how you do it today. If the project
+  takes the idea up, its maintainers write it; an idea is not a promise
+  that it will be.
 
-## Making a change
+## A package of your own
 
-1. Fork `Tuatara-Editor/tuatara-packages` and clone your fork. Add the project as
-   `upstream`:
+Write it in a repository of your own and keep it there: you look after it,
+take its issues and answer its users. Tuatara loads it from there as it
+loads these, after asking the user, its source offered to read:
 
-   ```
-   git remote add upstream https://github.com/Tuatara-Editor/tuatara-packages.git
-   ```
+```lisp
+(package-source "kahikatea" "https://example.org/you/kahikatea")
+(load-package "kahikatea" :source "kahikatea")
+```
 
-2. Start each change from the newest `main`, on a branch of its own:
+[README.org](README.org) says how a package is laid out and tested, and
+which of Tuatara's names it may use: those Tuatara's API exports
+(`lisp/api.lisp`), which are what the project keeps stable for packages. If
+your package needs something the API lacks, ask for it in an issue on
+[tuatara](https://github.com/Tuatara-Editor/tuatara/issues).
 
-   ```
-   git fetch upstream
-   git switch -c short-name-of-the-change upstream/main
-   ```
+## For the maintainers
 
-3. Change and test as [README.org](README.org) says: `tools/test.sh` runs
-   every package's tests against a Tuatara source tree beside this one.
-4. Commit with a sign-off, and sign the commit if you can:
-
-   ```
-   git commit -s -S
-   ```
-
-5. Push the branch to your fork and open a pull request against
-   `Tuatara-Editor/tuatara-packages:main`. Keep it to one change: two unrelated
-   fixes are two pull requests.
-6. A maintainer reviews it. Push further commits to the same branch to
-   answer the review; the pull request is merged as one commit, its title
-   becoming the commit's first line.
-7. After the merge, delete the branch and bring your fork's `main` up to
-   date (`git switch main && git pull --ff-only upstream main && git push`).
-
-## What a change needs
+Changes come through pull requests, one change each, signed (`git commit -s
+-S`) and reviewed, merged as one commit whose title becomes its first line.
+A change needs:
 
 - **Its tests.** A fix, or two ways of doing one thing merged into one, comes
   with a test that fails on the code before the change and passes after it.
@@ -63,20 +58,14 @@ anyone else is closed by the checks, with a note pointing here.
   employer, a customer or a case. Test files are small, made up for the test,
   and say nothing about real people.
 - **No paths outside the project.** Code, tests, documentation and examples
-  refer to no file or folder of anyone's own: no home folder layout, note or
-  file name, tag, template, account or machine. They name only the project's
+  refer to no file or folder of anyone's own. They name only the project's
   own files, a test's own temporary folder, what every system has (`/tmp`,
   `/etc`), or plain made-up places (`~/notes/`, `~/Documents/report.org`).
 
-## Sign-off
-
-The `Signed-off-by:` line `git commit -s` adds is your statement, under the
+The `Signed-off-by:` line is the author's statement, under the
 [Developer Certificate of Origin](https://developercertificate.org/), that
-you wrote the change or otherwise have the right to give it under the
-project's licence, the GNU General Public License, version 3 or later. The
-checks refuse a pull request with a commit not signed off by its author;
-`git rebase --signoff upstream/main` adds the line to every commit of a
-branch.
+they have the right to give the change under the project's licence, the GNU
+General Public License, version 3 or later.
 
 ## Security faults
 

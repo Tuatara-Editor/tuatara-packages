@@ -153,7 +153,7 @@ revision before. The same file gives the same log but for its date line."
       (format s "Source file:  ~a~%Size:         ~:d octets (~a)~%SHA-256:      ~a~%" (analysis-name analysis) (analysis-size analysis)
               (hex-offset (analysis-size analysis)) (or (analysis-sha256 analysis) "(could not be summed)"))
       (format s "Written:      ~a~%" (format-time "%F %T %z" (get-universal-time)))
-      (format s "Written by:   palimpsest ~a, a third-party package for the Tuatara editor~%~%" *palimpsest-version*)
+      (format s "Written by:   palimpsest ~a, one of the Tuatara project's packages~%~%" *palimpsest-version*)
       ;; how it was found
       (format s "How this revision was found~%---------------------------~%")
       (format s "Its %%EOF is at ~a; its line ends at ~a.~%" (offset-words (revision-eof revision)) (offset-words (revision-end revision)))
