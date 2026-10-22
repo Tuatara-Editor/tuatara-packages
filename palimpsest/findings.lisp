@@ -367,8 +367,11 @@ object it adds or changes, or a new page) set beside what it was before."
                                                                                                              (offset-words (revision-startxref-at revision))
                                                                                                              (and (revision-startxref revision) (offset-words (revision-startxref revision)))))
                                                                 (and (revision-xref-at revision) (format nil "the section read is at ~a" (offset-words (revision-xref-at revision))))))
-                                    :steps (list (format nil "Go to the startxref before the %%EOF at ~a and read the offset after it; go to that offset and see what begins there."
-                                                         (offset-words (revision-eof revision))))))))
+                                    :steps (list (if (revision-startxref-at revision)
+                                                     (format nil "Go to the startxref before the %%EOF at ~a and read the offset after it; go to that offset and see what begins there."
+                                                             (offset-words (revision-eof revision)))
+                                                     (format nil "Read back from the %%EOF at ~a: no startxref stands before it, so nothing names where this save's cross-reference section begins."
+                                                             (offset-words (revision-eof revision)))))))))
 
 (defun check-offsets (pdf)
   "Cross-reference entries that do not point at the object they name."
@@ -620,9 +623,9 @@ object it adds or changes, or a new page) set beside what it was before."
                                        (octets-evidence (format nil "~a in the XMP" local) data (max 0 (- at 8)) (min (length data) (+ at 80))
                                                         :decoded (format nil "the decoded stream of object ~d" xmp-number)))))))))
           ;; information and XMP disagreeing
-          (loop for (key local words) in '(("/CreationDate" "CreateDate" "creation date") ("/ModDate" "ModifyDate" "date last changed")
-                                          ("/Producer" "Producer" "producing program") ("/Creator" "CreatorTool" "creating program")
-                                          ("/Title" "title" "title"))
+          (loop for (key local words) in '(("/CreationDate" "CreateDate" "creation dates") ("/ModDate" "ModifyDate" "dates last changed")
+                                          ("/Producer" "Producer" "producing programs") ("/Creator" "CreatorTool" "creating programs")
+                                          ("/Title" "title" "titles"))
                 do (let ((a (info-text pdf last key)) (b (xmp-get fields local)))
                      (when (and a b)
                        (let ((differ (if (search "Date" key)
@@ -630,7 +633,7 @@ object it adds or changes, or a new page) set beside what it was before."
                                          (string/= (string-trim " " a) (string-trim " " b)))))
                          (when differ
                            (push (found (if (and (search "Date" key) (> (abs (- (or (date-of a) 0) (or (date-of b) 0))) 86400)) :strong :look)
-                                        (format nil "The document information and the XMP metadata give different ~as: ~s and ~s; one was changed without the other." words a b)
+                                        (format nil "The document information and the XMP metadata give different ~a: ~s and ~s; one was changed without the other." words a b)
                                         :rule "A program saving a PDF writes the same dates, programs and title in its document information and its XMP metadata."
                                         :revision (revision-index last) :objects (remove nil (list info-number xmp-number))
                                         :evidence (append (info-evidence key) (xmp-evidence local)))
@@ -945,7 +948,7 @@ what shows, a page that is one picture with text over it."
                  (apply #'append (reverse one-by-one))
                  :details (mapcar #'line-text (reverse one-by-one))))
           (when spaced
-            (add :look (format nil "~:d line~:p on page ~d ~:*~:*~[~;is~:;are~] spaced oddly, ~:*~:*~[~;its~:;their~] characters set apart one by one: fitted into a gap."
+            (add :look (format nil "~:d line~:p on page ~d ~:*~:*~[~;is~:;are~] spaced oddly, ~:*~[~;its~:;their~] characters set apart one by one: fitted into a gap."
                                (length spaced) p)
                  "Characters set apart by moving the text on, nearly one by one, where the rest of the page is not, are how text is fitted into a gap."
                  (apply #'append (reverse spaced))
@@ -1285,7 +1288,7 @@ dictionary with a /ByteRange among its objects."
                                    (content (remove :content kinds :key #'cdr :test-not #'eq))
                                    (annotations (remove :annotation kinds :key #'cdr :test-not #'eq))
                                    (forms (remove :form kinds :key #'cdr :test-not #'eq))
-                                   (allowed-annotations (and permission (>= permission 3)))
+                                   (allowed-annotations (or (null permission) (>= permission 3)))
                                    (allowed-forms (or (null permission) (>= permission 2))))
                               (cond (content
                                      (push (found :strong (format nil "~@(~a~), after the signature in object ~d, changes what the document shows (object~p ~{~d~^, ~}): the signature does not vouch for what is shown."
@@ -1302,7 +1305,7 @@ dictionary with a /ByteRange among its objects."
                                            out))
                                     (kinds
                                      (push (found :look (format nil "~@(~a~), after the signature in object ~d, adds or changes ~{~a~^, ~}." (revision-name r) number
-                                                                (remove-duplicates (mapcar (lambda (k) (string-downcase (symbol-name (cdr k)))) kinds) :test #'string=))
+                                                                (remove-duplicates (mapcar (lambda (k) (ecase (cdr k) (:annotation "annotations") (:form "form values") (:signature "signatures") (:security "validation data"))) kinds) :test #'string=))
                                                   :rule "Changes after a signature are allowed when they are signatures, validation data, form values or annotations."
                                                   :revision k :objects (mapcar #'car kinds))
                                            out)))))
@@ -1316,7 +1319,7 @@ dictionary with a /ByteRange among its objects."
                               final-reach)
                      (when shadows
                        (setf shadows (sort shadows #'<))
-                       (push (found :strong (format nil "Object~p ~{~d~^, ~} ~:*~:*~[~;was~:;were~] hidden, unused, in the part the signature in object ~d covers, and brought into use by a later save: a shadow attack."
+                       (push (found :strong (format nil "Object~p ~{~d~^, ~} ~:*~:*~[~;was~:;were~]~* hidden, unused, in the part the signature in object ~d covers, and brought into use by a later save: a shadow attack."
                                                     (length shadows) shadows number)
                                     :rule "An object in the signed octets that the signed document never uses, but a later save does, lets what was signed show something else."
                                     :revision (revision-index last) :objects shadows
@@ -1369,7 +1372,7 @@ dictionary with a /ByteRange among its objects."
                                          :revision (revision-index last) :page (1+ (page-index page)) :objects (and (page-number page) (list (page-number page)))
                                          :evidence (and (page-number page) (nth-value 0 (object-evidence pdf last (page-number page)))))
                                   out)))))
-          (odd (lambda (p) (format nil "~{~,0f~^ by ~}" (list (- (third (page-media p)) (first (page-media p))) (- (fourth (page-media p)) (second (page-media p)))))) "size")
+          (odd (lambda (p) (format nil "~{~d~^ by ~}" (list (round (- (third (page-media p)) (first (page-media p)))) (round (- (fourth (page-media p)) (second (page-media p))))))) "size")
           (odd (lambda (p) (format nil "~d°" (page-rotate p))) "rotation"))
         (let ((faces (mapcar (lambda (page)
                                (job-check-stop)
@@ -1401,15 +1404,33 @@ dictionary with a /ByteRange among its objects."
 
 ;;; Actions, embedded files, encryption
 
+(defun dictionaries-within (value)
+  "VALUE, when it is a dictionary, and every dictionary written inside it, in
+its dictionaries and arrays, outermost first; not those it refers to, which
+are objects of their own. Followed no deeper than 32, as a file may nest
+without end."
+  (let ((found '()))
+    (labels ((walk (v depth)
+               (when (< depth 32)
+                 (cond ((pdf-dictionary-p v)
+                        (push v found)
+                        (loop for (nil . inner) in v do (walk inner (1+ depth))))
+                       ((and (consp v) (not (pdf-ref-p v)))
+                        (dolist (inner (pdf-array-items v)) (walk inner (1+ depth))))))))
+      (walk value 0))
+    (nreverse found)))
+
 (defun check-actions (pdf revision)
-  "JavaScript, actions on opening, programs launched, addresses, forms sent and files embedded: named, never run or opened."
+  "JavaScript, actions on opening, programs launched, addresses, forms sent and files embedded: named, never run or opened.
+An action is found as an object of its own and written inside another, as a link's /A is."
   (let ((acts '()) (files '()))
     (dolist (n (live-numbers pdf revision))
       (let* ((object (revision-object pdf revision n)) (value (and object (pdf-indirect-value object))))
         (when (pdf-dictionary-p value)
-          (let ((kind (pdf-get value "/S")))
-            (when (and (stringp kind) (member kind '("/JavaScript" "/Launch" "/URI" "/SubmitForm" "/ImportData" "/GoToR" "/GoToE" "/RichMediaExecute") :test #'string=))
-              (push (list n (subseq kind 1) (let ((u (or (pdf-get value "/URI") (pdf-get value "/F") (pdf-get value "/JS")))) (and (stringp u) (shorten-string u 100 :one-line t)))) acts)))
+          (dolist (action (dictionaries-within value))
+            (let ((kind (pdf-get action "/S")))
+              (when (and (stringp kind) (member kind '("/JavaScript" "/Launch" "/URI" "/SubmitForm" "/ImportData" "/GoToR" "/GoToE" "/RichMediaExecute") :test #'string=))
+                (push (list n (subseq kind 1) (let ((u (or (pdf-get action "/URI") (pdf-get action "/F") (pdf-get action "/JS")))) (and (stringp u) (shorten-string u 100 :one-line t)))) acts))))
           (when (pdf-get value "/OpenAction") (push (list n "OpenAction" nil) acts))
           (when (and (pdf-get value "/AA") (not (pdf-get value "/FT"))) (push (list n "AA (actions on events)" nil) acts))
           (when (or (name-p (pdf-get value "/Type") "/EmbeddedFile") (pdf-get value "/EF"))
@@ -1423,12 +1444,14 @@ dictionary with a /ByteRange among its objects."
                             (and stream (written-in pdf revision (pdf-indirect-number stream))))
                       files)))))))
     (append
-     (loop for (strength kinds words) in '((:look ("JavaScript" "Launch" "SubmitForm" "ImportData" "RichMediaExecute" "AA (actions on events)")
-                                           "that run code, start programs or send data")
-                                          (:record ("URI" "GoToR" "GoToE" "OpenAction") "that go to places, in the file or outside it"))
+     (loop for (strength kinds one many) in '((:look ("JavaScript" "Launch" "SubmitForm" "ImportData" "RichMediaExecute" "AA (actions on events)")
+                                               "that runs code, starts programs or sends data" "that run code, start programs or send data")
+                                              (:record ("URI" "GoToR" "GoToE" "OpenAction")
+                                               "that goes to places, in the file or outside it" "that go to places, in the file or outside it"))
            for some = (reverse (remove-if-not (lambda (a) (member (second a) kinds :test #'string=)) acts))
            when some
-             collect (found strength (format nil "The file holds ~d action~:p ~a (~{~a~^, ~}), named here and never run." (length some) words
+             collect (found strength (format nil "The file holds ~d action~:p ~a (~{~a~^, ~}), named here and never run." (length some)
+                                             (if (= 1 (length some)) one many)
                                              (remove-duplicates (mapcar #'second some) :test #'string= :from-end t))
                             :rule "Actions and JavaScript in a PDF act when it is opened or clicked; they are named here, never run."
                             :revision (revision-index revision) :objects (mapcar #'first some)
