@@ -201,62 +201,16 @@ be read as a filename."
 ;; comma is csvdt's own separator inside a value (-a 1,0, -i 0,replace,
 ;; -o0,+02:00).
 
-(defun csvdt-closing-quote (line start quote-char)
-  "Where in LINE the QUOTE-CHAR closing a run opened before START is, or NIL.
-Inside double quotes a backslash escapes the next character, so an escaped
-quote closes nothing; single quotes have no escapes, which is what lets them
-hold a backslash as itself."
-  (loop with index = start
-        while (< index (length line))
-        do (let ((char (char line index)))
-             (cond ((and (char= quote-char #\") (char= char #\\) (< (1+ index) (length line)))
-                    (incf index 2))
-                   ((char= char quote-char) (return index))
-                   (t (incf index))))))
-
-(defun csvdt-unescape (run whole)
-  "RUN, the inside of a double-quoted run (WHOLE with its quotes, for the
-error), its escapes made what they stand for: \\t \\n \\r \\\\ \\\" and no
-others, so that \"C:\\data\" is refused rather than read as something else."
-  (with-output-to-string (out)
-    (loop with index = 0
-          while (< index (length run))
-          do (let ((char (char run index)))
-               (if (char/= char #\\)
-                   (progn (write-char char out) (incf index))
-                   (let ((next (and (< (1+ index) (length run)) (char run (1+ index)))))
-                     (write-char (case next
-                                   (#\t #\Tab) (#\n #\Newline) (#\r #\Return) (#\\ #\\) (#\" #\")
-                                   (t (error "Cannot read ~a: inside double quotes a backslash starts an escape, and only \\t \\n \\r \\\\ \\\" are taken. Single quotes take backslashes as they are" whole)))
-                                 out)
-                     (incf index 2)))))))
-
 (defun csvdt-split-arguments (line)
   "LINE split into arguments as a shell would: a quoted argument may hold a
 space, an unquoted one a comma, which csvdt's value lists need. Either quote
-is taken; in double quotes the escapes \\t \\n \\r \\\\ \\\" (CSVDT-UNESCAPE), in
+is taken; in double quotes the escapes \\t \\n \\r \\\\ \\\" and no others, in
 single quotes none. So a lone quote is written in the other kind, and a value
 keeping its backslashes in single quotes. Outside quotes a backslash is
 itself, unlike a shell: a Windows path typed as a value comes through whole."
-  (let ((arguments '()) (current nil) (index 0))
-    (loop while (< index (length line))
-          do (let ((char (char line index)))
-               (cond ((csvdt-space-p char)
-                      (when current (push current arguments) (setf current nil))
-                      (incf index))
-                     ((member char '(#\" #\'))
-                      (let ((end (csvdt-closing-quote line (1+ index) char)))
-                        (unless end (error "Unbalanced quotes in: ~a" line))
-                        (let ((run (subseq line (1+ index) end)))
-                          (setf current (concatenate 'string (or current "")
-                                                     (if (char= char #\')
-                                                         run
-                                                         (csvdt-unescape run (subseq line index (1+ end)))))
-                                index (1+ end)))))
-                     (t (setf current (concatenate 'string (or current "") (string char)))
-                        (incf index)))))
-    (when current (push current arguments))
-    (nreverse arguments)))
+  (multiple-value-bind (words ok why) (command-words line :backslash :escapes)
+    (unless ok (error "Cannot read ~a: ~a" line why))
+    words))
 
 (defun csvdt-argument-at (text point options)
   "The argument of TEXT, a csvdt command line, that ends at POINT, to be
@@ -572,31 +526,19 @@ when csvdt stops reading."
         (file-system-error () nil)))))
 
 (defun csvdt-work (job)
-  "Run JOB's csvdt, its ranges written to it, what it writes and says read as
-it goes, on threads of their own so that none waits on another."
-  (let ((process (sb-ext:run-program (csvdt-job-program job) (csvdt-job-arguments job)
-                                     :wait nil :input :stream :output :stream :error :stream
-                                     :directory (csvdt-job-directory job))))
-    (job-program-started job process)
-    (unwind-protect
-         (flet ((reader (stream name)
-                  (let ((fd (sb-sys:fd-stream-fd stream)))
-                    (make-guarded-thread (lambda () (read-fd-octets fd :path name)) :name name))))
-           (let ((output (reader (sb-ext:process-output process) "csvdt output"))
-                 (said (reader (sb-ext:process-error process) "csvdt messages")))
-             (csvdt-send job (sb-sys:fd-stream-fd (sb-ext:process-input process)))
-             (ignore-errors (close (sb-ext:process-input process)))
-             (let ((written (sb-thread:join-thread output :default nil))
-                   (spoken (sb-thread:join-thread said :default nil)))
-               (sb-ext:process-wait process)
-               (if (car (csvdt-job-cancel job))
-                   (setf (csvdt-job-status job) :stopped)
-                   (setf (csvdt-job-output job) (or written (make-array 0 :element-type '(unsigned-byte 8)))
-                         (csvdt-job-said job) (string-trim '(#\Space #\Newline)
-                                                           (if spoken (lenient-string spoken) ""))
-                         (csvdt-job-exit job) (sb-ext:process-exit-code process)
-                         (csvdt-job-status job) :done)))))
-      (ignore-errors (sb-ext:process-close process)))))
+  "Run JOB's csvdt over its ranges, written to it a piece at a time
+\(CSVDT-SEND), what it writes and says read as it goes; stopping the job
+ends it."
+  (multiple-value-bind (written said exit)
+      (filter-through-program (cons (csvdt-job-program job) (csvdt-job-arguments job))
+                              (lambda (fd) (csvdt-send job fd))
+                              :job job :directory (csvdt-job-directory job) :limit nil)
+    (if (car (csvdt-job-cancel job))
+        (setf (csvdt-job-status job) :stopped)
+        (setf (csvdt-job-output job) (or written (make-array 0 :element-type '(unsigned-byte 8)))
+              (csvdt-job-said job) (string-trim '(#\Space #\Newline) (or said ""))
+              (csvdt-job-exit job) exit
+              (csvdt-job-status job) :done))))
 
 (defun csvdt-line-total (octets)
   "How many lines OCTETS hold, a last one with no newline counted."

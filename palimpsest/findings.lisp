@@ -211,11 +211,12 @@ of (LOCAL-NAME . VALUE): action, when, softwareAgent, instanceID, changed."
 
 (defun date-of (text)
   "TEXT, a date as a PDF or XMP writes it, as two values: the universal time and its zone in minutes, or NIL."
-  (if (and text (cl-ppcre:scan "^\\d{4}-" text))
-      (iso-date-time text)
-      (multiple-value-bind (words time zone) (pdf-date-words text)
-        (declare (ignore words))
-        (values time zone))))
+  (multiple-value-bind (time zone) (iso-date-time text)
+    (if time
+        (values time zone)
+        (multiple-value-bind (words time zone) (pdf-date-words text)
+          (declare (ignore words))
+          (values time zone)))))
 
 ;;; Tools that make and edit PDFs
 
